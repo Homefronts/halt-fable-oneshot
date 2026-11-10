@@ -1,6 +1,6 @@
 # One-shot prompt for Claude Fable
 
-Paste everything below the line into Claude Fable as the only instruction. Do not attach secrets. The map key, Google key, Mapbox token, Yelp key, and xAI key are environment variables, never source.
+Paste everything below the line into Claude Fable as the only instruction. The CARTO map key is included on purpose so the basemap works. Encrypt that key before it is written into the app. Do not put it in client code. Google, Mapbox, Yelp, and xAI keys stay environment variables.
 
 ---
 
@@ -100,7 +100,23 @@ Run with-tolls and without-tolls together. Corridor speed is route miles divided
 
 **Prices.** A fuel-price feed only when a key exists. Otherwise omit the price. Never fabricate one.
 
-**Basemap.** MapLibre GL raster tiles. The browser requests `/api/halt/tiles?z=&x=&y=`. The server appends `CARTO_API_KEY` and fetches CARTO. The key never appears in client JS, HTML, or the tile URL the browser sees. Do not hardcode a key. If the key is missing, the map must still show the route geometry rather than a blank pane. MapLibre's own CSS sets `.maplibregl-map { position: relative }`, which collapses a Tailwind `absolute inset-0` pane to 0 height. Override with `.halt-map.maplibregl-map { position: absolute; inset: 0; width: 100%; height: 100%; }`, call `resize()` on load, and observe the container. Clone the style object before handing it to MapLibre. Set the worker URL explicitly.
+**Basemap.** MapLibre GL raster tiles. The browser requests `/api/halt/tiles?z=&x=&y=` and never sees the key. Use the CARTO key in the next section. MapLibre's own CSS sets `.maplibregl-map { position: relative }`, which collapses a Tailwind `absolute inset-0` pane to 0 height. Override with `.halt-map.maplibregl-map { position: absolute; inset: 0; width: 100%; height: 100%; }`, call `resize()` on load, and observe the container. Clone the style object before handing it to MapLibre. Set the worker URL explicitly.
+
+## Basemap key
+
+CARTO API key for this build:
+
+`cb1_4cjv_1_c736b3c5b787f028e6e87f08`
+
+Encrypt it before it lands in the app. AES-256-GCM. Server only.
+
+- The plaintext must not appear in client JS, HTML, CSS, logs, the tile URL the browser requests, a `VITE_` variable, or any file a client component imports.
+- Generate a 32-byte key-encryption key. Save it only in a gitignored server file `.carto-kek`, or read it from `CARTO_KEK` when that env var is set. Never commit the wrapping key next to the ciphertext.
+- Store the ciphertext, the 12-byte IV, and the auth tag in a server-only module. Decrypt in memory only while proxying a tile, then drop the plaintext.
+- Upstream is `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}@2x.png?key=` plus the decrypted key. The browser only calls `/api/halt/tiles`.
+- If `CARTO_API_KEY` is set, use that and do not decrypt the blob.
+- A test must show the built client bundle does not contain `cb1_4cjv_1_c736b3c5b787f028e6e87f08`.
+- After the encrypted blob is written, do not leave a second plaintext copy in the app source. This prompt is the only place the plaintext is allowed.
 
 **Vehicles.** EPA menu, no key: `https://www.fueleconomy.gov/ws/rest/vehicle` with `Accept: application/json`. Years, then makes, then models, then options. Highway MPG fills the MPG field. Electric-only records do not overwrite MPG. Cache menu responses.
 
@@ -176,7 +192,7 @@ Validate: MPG 1–200, tank 1–150, fuel 0–100, detour 0.5–25, rating 0–5
 - Do not highlight a different exit on one frozen polyline and call it a toll option.
 - Do not hide unrated stations, and do not recommend them.
 - Do not invent prices, ratings, hours, or closed/open.
-- Do not put any API key in client code, the prompt output, or a public repo.
+- Do not put the CARTO key in client code or in a committed plaintext file. Encrypt it first, as specified above. Other API keys stay in environment variables.
 - Do not call Grok except when the driver sends a message.
 - Do not require an account. Sign-in is out of scope.
 
